@@ -167,7 +167,7 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize','auth0-redirect','a
       $scope.fileUpload = function($event) {
         $event.preventDefault()
 
-        filepicker.setKey('ArJvm0QBMSXDBxXb1wC1wz');
+        filepicker.setKey(KEY);
 
         filepicker.pickMultiple(function(InkBlobs){
            var uploads = InkBlobs;
