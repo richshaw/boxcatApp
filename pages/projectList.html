@@ -1,0 +1,19 @@
+
+<h2>My projects</h2>
+<div>
+  <ul>
+    <li ng-repeat="project in projects | filter:q" class="access-{{project.access}}">
+      [{{$index + 1}}] <a href="/project/{{project.id}}">{{project.id}}</a> - {{project.created}} - 
+      <button ng-click="deleteProject(project)">Delete</button>
+    </li>
+  </ul>
+</div>
+
+<h2>Create new project</h2>
+<div>
+<form novalidate class="simple-form">
+    Access: <input type="radio" ng-model="newProject.access" value="1"/>Private
+    <input type="radio" ng-model="newProject.access" value="2" />Anyone with link<br />
+    <button ng-click="createProject(newProject)">Create</button>
+  </form>
+</div>

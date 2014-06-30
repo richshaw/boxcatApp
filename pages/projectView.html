@@ -1,0 +1,18 @@
+<div>
+    <a href="/project/{{project.id}}">{{project.id}}</a> - {{project.created}} 
+</div>
+<div ng-controller="ProjectUploadCtrl">
+    <label>Upload files to project</label>
+    <input type="file" ng-click="fileUpload($event)"></input>
+    <label>Email files to project</label>
+    <input type="text" value="{{project.email}}" readonly></input>
+    <label>SMS files to project</label>
+    <input type="text" value="{{project.phone}}" readonly></input>
+</div>
+<div>
+  <ul>
+    <li ng-repeat="artifact in artifacts | filter:q" class="access-{{project.access}}">
+      [{{$index + 1}}] <a href="/project/{{project.id}}/artifact/{{artifact.id}}" >{{artifact.id}}</a> - {{artifact.contentType}} - {{artifact.uploadDate}}
+    </li>
+  </ul>
+</div>
