@@ -1,4 +1,4 @@
-angular.module('boxCatApp', ['config','ngRoute','ngSanitize'])
+angular.module('boxCatApp', ['config','ngRoute','ngSanitize','auth0-redirect','authInterceptor'])
 
 
   .factory("boxCatApi", function($http,ENV){
@@ -42,6 +42,24 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize'])
     };
 
     return boxCatApi;
+
+  })
+
+
+  .controller('MenuCtrl', function ($scope, $location) {
+    $scope.go = function (target) {
+      $location.path(target);
+    };
+  })
+
+  .controller('AppCtrl', function ($scope, auth) {
+    $scope.message = 'loading...';
+    auth.loaded.then(function () {
+      $scope.message = '';
+    });
+  })
+
+  .controller('MenuCtrl', function ($scope, $location, $http, auth) {
 
   })
 
@@ -143,6 +161,39 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize'])
               $scope.status = 'Unable to load projects: ' + error.message;
           });
       }
+
+      //Trigger file upload dialoge on click
+      //https://developers.inkfilepicker.com/docs/web/
+      $scope.fileUpload = function($event) {
+        $event.preventDefault()
+
+        filepicker.setKey('ArJvm0QBMSXDBxXb1wC1wz');
+
+        filepicker.pickMultiple(function(InkBlobs){
+           var uploads = InkBlobs;
+           //Send each file request to API
+           //Gte project Id
+           var pId = $routeParams.projectId;
+           angular.forEach(uploads, function(value, key) {
+
+              var artifact = {}
+              artifact.filename = value.url;
+              artifact.metaData = [];
+
+              boxCatApi.createProjectArtifact(pId,artifact)
+                  .success(function (data) {
+                      $scope.status = 'Created artifact!';
+                       //Add newly created project to list
+                      $scope.artifacts.push(data.data);
+                  })
+                  .error(function(error) {
+                      $scope.status = 'Unable to create artifact: ' + error.message;
+                  });
+
+           }); //End forEach
+
+        });
+      };
       
   })
 
@@ -151,37 +202,37 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize'])
   View project details
   View list of artifacts
   */
-
-  /**********
-  * TODO IMPLEMENT REST FACTORY
-  *
-  */
-  .controller('ArtifactViewCtrl', function($scope, $http, ENV, $routeParams, $sce) {
+  .controller('ArtifactViewCtrl', function($scope, $http, boxCatApi, ENV,$routeParams, $sce) {
       
       //Get project data
       $scope.artifact = [];
 
-      var endPoint = ENV.apiEndPoint + '/project/' + $routeParams.projectId + '/artifact/' + $routeParams.artifactId;
 
-      var responsePromise = $http.get(endPoint);
+      //On initial load
+      loadArtifact($routeParams.projectId,$routeParams.artifactId);
 
-      responsePromise.success(function(data, status, headers, config) {
-          $scope.artifact = data.data;
-          $scope.artifact.download =  endPoint + '/download';
+      function loadArtifact(pId,aId) {
+        boxCatApi.getProjectArtifact(pId,aId)
+          .success(function (data) {
+              $scope.artifact = data.data;
+              //Set artifact download URL
+              $scope.artifact.download =  ENV.apiEndPoint + '/project/' + $routeParams.projectId + '/artifact/' + $routeParams.artifactId + '/download';
           
-          //Do we have any metaData?
-          //Controls show and hide in html
-          if(Object.getOwnPropertyNames($scope.artifact.metaData).length == 0) {
-            $scope.artifact.metaData = false;
-          }
+              //Do we have any metaData?
+              //Controls show and hide in view
+              if(Object.getOwnPropertyNames($scope.artifact.metaData).length == 0) {
+                $scope.artifact.metaData = false;
+              }
+          })
+          .error(function (error) {
+              $scope.status = 'Unable to load artifact: ' + error.message;
+          });
+      }
 
-      });
-      responsePromise.error(function(data, status, headers, config) {
-          alert("Server error");
-      });
-
+      //We don't need full project object just get ID from URL
       $scope.projectId = $routeParams.projectId;
 
+      //Let Ng know these external urls are trusty
       $scope.trustSrc = function(src) {
         return $sce.trustAsResourceUrl(src);
       }
@@ -189,71 +240,141 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize'])
   })
 
 
-  .controller('ProjectUploadCtrl', function($scope, $http, ENV, $routeParams) {
-    
-    //Trigger file upload dialoge
-    //https://developers.inkfilepicker.com/docs/web/
-    $scope.fileUpload = function($event) {
-      $event.preventDefault()
+  .controller('LogoutCtrl', function (auth, $scope, $location) {
+    auth.signout();
+    $scope.$parent.message = '';
+    $location.path('/login');
+  })
 
-      filepicker.setKey('ArJvm0QBMSXDBxXb1wC1wz');
+  .controller('LoginCtrl', function (auth, $scope, $location) {
+    $scope.user = '';
+    $scope.pass = '';
 
-      filepicker.pickMultiple(function(InkBlobs){
-         var uploads = InkBlobs;
-         //Send each file request to API
-         angular.forEach(uploads, function(value, key) {
+    function onLoginSuccess() {
+      $scope.$parent.message = '';
+      $location.path('/project');
+    }
 
-          var endPoint = ENV.apiEndPoint + '/project/' + $routeParams.projectId + '/artifact';
+    function onLoginFailed() {
+      $scope.$parent.message = 'invalid credentials';
+    }
 
-          var postData = {}
-          postData.filename = value.url;
-          postData.metaData = [];
+    $scope.submit = function () {
+      $scope.$parent.message = 'loading...';
+      $scope.loading = true;
 
-          var responsePromise = $http.post(endPoint,postData);
+      auth.signin({
+        connection: 'Username-Password-Authentication',
+        username: $scope.user,
+        password: $scope.pass,
+        scope: 'openid name email'
+      }).then(onLoginSuccess, onLoginFailed)
+      .finally(function () {
+        $scope.loading = false;
+      });
+    };
 
-          responsePromise.success(function(data, status, headers, config) {
-            console.log(data);
-          });
-          responsePromise.error(function(data, status, headers, config) {
-              alert("Server error");
-          });
+    $scope.doGoogleAuthWithPopup = function () {
+      $scope.$parent.message = 'loading...';
+      $scope.loading = true;    
 
-         }); //End forEach
-
+      auth.signin({
+        popup: true,
+        connection: 'google-oauth2',
+        scope: 'openid name email'
+      }).then(onLoginSuccess, onLoginFailed)
+      .finally(function () {
+        $scope.loading = false;
       });
     };
 
   })
 
+  .run(function ($rootScope, $location, AUTH_EVENTS, $timeout) {
 
-  .config(function ($routeProvider, $locationProvider, $httpProvider) {
+    $rootScope.$on('$routeChangeError', function () {
+      var otherwise = $route.routes && $route.routes.null && $route.routes.null.redirectTo;
+      $timeout(function () {
+        $location.path(otherwise);
+      });
+    });
+  
+  })
+
+  .config(function ($routeProvider, $locationProvider, $httpProvider, authProvider, AUTH0) {
     //configure the routing rules here
-    $routeProvider.when('/project', {
+    $routeProvider
+
+    .when('/project', {
         templateUrl : "pages/projectList.html",
-        controller: "ProjectListCtrl"
+        controller: "ProjectListCtrl",
+        resolve: { isAuthenticated: isAuthenticated }
     })
 
     .when('/project/:projectId', {
         templateUrl : "pages/projectView.html",
-        controller: "ProjectViewCtrl"
+        controller: "ProjectViewCtrl",
+        resolve: { isAuthenticated: isAuthenticated }
     })
 
     .when('/project/:projectId/artifact/:artifactId', {
         templateUrl : "pages/artifactView.html",
-        controller: "ArtifactViewCtrl"
+        controller: "ArtifactViewCtrl",
+        resolve: { isAuthenticated: isAuthenticated }
     })
 
     .when('/project/:projectId/upload', {
         templateUrl : "pages/artifactUpload.html",
-        controller: "ProjectUploadCtrl"
-    });
+        controller: "ProjectUploadCtrl",
+        resolve: { isAuthenticated: isAuthenticated }
+    })
+    // Where the user will follow in order to close their session.
+    .when('/logout',  { 
+      templateUrl: 'pages/logout.html',   
+      controller: 'LogoutCtrl'
+    })
+    // Where the user will input their credentials.
+    .when('/login',   { 
+      templateUrl: 'pages/login.html',    
+      controller: 'LoginCtrl'   
+    })
+
+    .otherwise({ redirectTo: '/login' });
 
     //Enable cross domain calls
     $httpProvider.defaults.useXDomain = true;
 
     //routing DOESN'T work without html5Mode
     $locationProvider.html5Mode(true);
+
+    //Enable Auth provider
+    authProvider.init({ 
+      domain: AUTH0.domain, clientID: AUTH0.clientId, callbackURL: AUTH0.callbackUrl
+    });
+
+    // Add a simple interceptor that will fetch all requests and add the jwt token to its authorization header.
+    // NOTE: in case you are calling APIs which expect a token signed with a different secret, you might 
+    // want to check the delegation-token example
+    $httpProvider.interceptors.push('authInterceptor');
+
   });
+
+
+function isAuthenticated($q, auth) {
+  var deferred = $q.defer();
+
+  auth.loaded.then(function () {
+    if (auth.isAuthenticated) {
+      deferred.resolve();
+    } else {
+      deferred.reject();
+    }
+  });
+  return deferred.promise;
+}
+
+// Make it work with minifiers
+isAuthenticated.$inject = ['$q', 'auth'];
 
 
 
