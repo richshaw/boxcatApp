@@ -6,7 +6,7 @@ angular.module('config', [])
 })
 
 .constant('AUTH0', {
-  'domain': 'boxcat.auth0.com',
-  'clientId': 'RATdj9Kt0azJ9UGvYTt7ezaxUVz23JCc',
+  'domain': 'gouzout.auth0.com',
+  'clientId': 'ePe1RLcew10DOzkZFB728pTEigpCCExb',
   'callbackUrl': 'http://localhost:8000/'
 });
