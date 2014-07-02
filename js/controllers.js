@@ -46,21 +46,39 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize','auth0-redirect','a
   })
 
 
-  .controller('MenuCtrl', function ($scope, $location) {
-    $scope.go = function (target) {
-      $location.path(target);
-    };
-  })
-
   .controller('AppCtrl', function ($scope, auth) {
-    $scope.message = 'loading...';
-    auth.loaded.then(function () {
-      $scope.message = '';
-    });
+    $scope.message = '';
   })
 
   .controller('MenuCtrl', function ($scope, $location, $http, auth) {
 
+    $scope.login = function () {
+      auth.signin({scope: 'openid profile' })
+        .then(function () {
+          // TODO Handle when login succeeds
+          $location.path('/project');
+        }, function () {
+          // TODO Handle when login fails
+        });
+    };
+
+  })
+
+  .controller('LoginCtrl', function (auth, $scope) {
+
+      auth.signin({scope: 'openid profile' })
+        .then(function () {
+          // TODO Handle when login succeeds
+          $location.path('/project');
+        }, function () {
+          // TODO Handle when login fails
+        });
+
+  })
+
+  .controller('LogoutCtrl', function (auth, $location) {
+    auth.signout();
+    $location.path('/');
   })
 
   /**
@@ -207,7 +225,6 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize','auth0-redirect','a
       //Get project data
       $scope.artifact = [];
 
-
       //On initial load
       loadArtifact($routeParams.projectId,$routeParams.artifactId);
 
@@ -216,6 +233,8 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize','auth0-redirect','a
           .success(function (data) {
               $scope.artifact = data.data;
               //Set artifact download URL
+
+              //@TODO SECURE URL
               $scope.artifact.download =  ENV.apiEndPoint + '/project/' + $routeParams.projectId + '/artifact/' + $routeParams.artifactId + '/download';
           
               //Do we have any metaData?
@@ -240,106 +259,61 @@ angular.module('boxCatApp', ['config','ngRoute','ngSanitize','auth0-redirect','a
   })
 
 
-  .controller('LogoutCtrl', function (auth, $scope, $location) {
-    auth.signout();
-    $scope.$parent.message = '';
-    $location.path('/login');
-  })
-
-  .controller('LoginCtrl', function (auth, $scope, $location) {
-    $scope.user = '';
-    $scope.pass = '';
-
-    function onLoginSuccess() {
-      $scope.$parent.message = '';
-      $location.path('/project');
-    }
-
-    function onLoginFailed() {
-      $scope.$parent.message = 'invalid credentials';
-    }
-
-    $scope.submit = function () {
-      $scope.$parent.message = 'loading...';
-      $scope.loading = true;
-
-      auth.signin({
-        connection: 'Username-Password-Authentication',
-        username: $scope.user,
-        password: $scope.pass,
-        scope: 'openid name email'
-      }).then(onLoginSuccess, onLoginFailed)
-      .finally(function () {
-        $scope.loading = false;
-      });
-    };
-
-    $scope.doGoogleAuthWithPopup = function () {
-      $scope.$parent.message = 'loading...';
-      $scope.loading = true;    
-
-      auth.signin({
-        popup: true,
-        connection: 'google-oauth2',
-        scope: 'openid name email'
-      }).then(onLoginSuccess, onLoginFailed)
-      .finally(function () {
-        $scope.loading = false;
-      });
-    };
-
-  })
-
-  .run(function ($rootScope, $location, AUTH_EVENTS, $timeout) {
-
+  .run(function ($rootScope, $location, $route, AUTH_EVENTS, $timeout) {
     $rootScope.$on('$routeChangeError', function () {
       var otherwise = $route.routes && $route.routes.null && $route.routes.null.redirectTo;
+      // Access denied to a route, redirect to otherwise
       $timeout(function () {
         $location.path(otherwise);
       });
     });
-  
   })
 
   .config(function ($routeProvider, $locationProvider, $httpProvider, authProvider, AUTH0) {
     //configure the routing rules here
     $routeProvider
 
+    .when('/', {
+        templateUrl : "views/projectList.html",
+        controller: "ProjectListCtrl",
+        resolve: { isAuthenticated: isAuthenticated }
+    })
+
     .when('/project', {
-        templateUrl : "pages/projectList.html",
+        templateUrl : "views/projectList.html",
         controller: "ProjectListCtrl",
         resolve: { isAuthenticated: isAuthenticated }
     })
 
     .when('/project/:projectId', {
-        templateUrl : "pages/projectView.html",
+        templateUrl : "views/projectView.html",
         controller: "ProjectViewCtrl",
         resolve: { isAuthenticated: isAuthenticated }
     })
 
     .when('/project/:projectId/artifact/:artifactId', {
-        templateUrl : "pages/artifactView.html",
+        templateUrl : "views/artifactView.html",
         controller: "ArtifactViewCtrl",
         resolve: { isAuthenticated: isAuthenticated }
     })
 
     .when('/project/:projectId/upload', {
-        templateUrl : "pages/artifactUpload.html",
+        templateUrl : "views/artifactUpload.html",
         controller: "ProjectUploadCtrl",
         resolve: { isAuthenticated: isAuthenticated }
     })
-    // Where the user will follow in order to close their session.
-    .when('/logout',  { 
-      templateUrl: 'pages/logout.html',   
+
+    .when('/logout',  {
+      templateUrl: 'views/blank.html',
       controller: 'LogoutCtrl'
     })
-    // Where the user will input their credentials.
-    .when('/login',   { 
-      templateUrl: 'pages/login.html',    
-      controller: 'LoginCtrl'   
+
+    .when('/login',   {
+      templateUrl: 'views/blank.html',
+      controller: 'LoginCtrl',
     })
 
-    .otherwise({ redirectTo: '/login' });
+    .otherwise({ redirectTo: '/' });
 
     //Enable cross domain calls
     $httpProvider.defaults.useXDomain = true;
